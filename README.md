@@ -16,13 +16,13 @@ Statsmodels - for decomposition of our time series
 Dataset: https://www.kaggle.com/datasets/fatemehmohammadinia/retail-sales-data-set-of-alcohol-and-liquor
 
 ## Key Features
-- Seasonal decomposition analysis
-- Multiple forecasting approaches (Prophet, ARIMA)
-- Comprehensive model evaluation
-- Interactive visualizations
+This project provides several analytical components:
+- Seasonal Decomposition Analysis: breaks the data series into trend, seasonal, and residual components.
+- Model Evaluation Process: Including error metrics such as MAE, RMSE, MAPE, and R².
+- Interactive visualizations: Showing forecasts and decomposition, highlighting seasonal peaks and troughs.
 
 ### Importing Libraries and Data
-<img width="608" height="188" alt="Screenshot 2025-08-29 at 11 09 00 AM" src="https://github.com/user-attachments/assets/9d5b6f3b-df69-40c2-8124-1acdd8678b5d" />
+<img width="611" height="191" alt="Screenshot 2025-09-06 at 1 25 54 PM" src="https://github.com/user-attachments/assets/66fe2a01-b5a8-4435-849b-8272308ed6ab" />
 
 ### About the Data
 - Time Period: January 2012 - December 2016
@@ -31,11 +31,21 @@ Dataset: https://www.kaggle.com/datasets/fatemehmohammadinia/retail-sales-data-s
 - Granularity: Daily sales aggregated to monthly for analysis
   
 ### Loading and breaking down the dataset 
+<img width="823" height="547" alt="Screenshot 2025-09-06 at 1 27 19 PM" src="https://github.com/user-attachments/assets/5f1a018f-1253-461b-8611-c17127cc2cb9" />
+
+First the code checks the dataset headers, removes the leading or trailing whitespace from column names, and selects only the relevant fields. Missing values in the Date column are dropped (as seen on line 41), and then we index chronologically. The reason for structuring the data this way ensures accurate resampling and modeling later on.
 
 ### Monthly resampling and seasonality Analysis
-- Monthly seasonal indices calculation
-- Peak season identification (Nov-Dec: +25% sales)
-- Low season analysis (Jan-Feb: -15% sales)
+<img width="545" height="61" alt="Screenshot 2025-09-06 at 1 30 27 PM" src="https://github.com/user-attachments/assets/52699255-edd6-4fd0-b448-50b33b430618" />
+The data is resampled into monthly totals of bottles sold.
+
+<img width="667" height="349" alt="Screenshot 2025-09-06 at 1 31 56 PM" src="https://github.com/user-attachments/assets/b7f153b2-b4ef-44ab-abf9-35a3d4b013a8" />
+Early on in the process of making this project I noticed numerous outlier sales that were effecting our seasonality metrics. To handle these issues, i created a outlier handler that detected outliers using a rolling z-score method and replaced with local medians to smooth the series. The use of z-scores to detect the outliers rather than IQR methods is because... 
+- 1. I noticed an overall upward trend (IQR methods works best with stable distributions)
+- 2. Rolling Z-scores tend to work better with data with temporal structures like sales over time or stock prices
+
+<img width="742" height="306" alt="Screenshot 2025-09-06 at 1 42 30 PM" src="https://github.com/user-attachments/assets/efd916cd-d516-4ee8-832b-ad0d26cae166" />
+Seasonal indices are then calculated by averaging sales by calendar month. This reveals strong seasonal patterns, with November and December consistently showing a 25% increase in sales, while January and February exhibit about a 15% decrease relative to average months.
 
 ### Decomposition Analysis
 - STL decomposition with 12-month period
