@@ -100,6 +100,9 @@ Here we fit the model and create the future data frame. Since I reasampled the d
 ### Model visualization code:
 <img width="809" height="516" alt="Screenshot 2025-09-06 at 2 34 50 PM" src="https://github.com/user-attachments/assets/3144a988-9476-420f-ac0c-1e1236206338" />
 
+<img width="1455" height="768" alt="Screenshot 2025-09-06 at 2 37 38 PM" src="https://github.com/user-attachments/assets/d82c80a7-bc3b-4a8f-a959-328f59e02f5b" />
+
+
 <img width="990" height="562" alt="Screenshot 2025-09-06 at 2 36 06 PM" src="https://github.com/user-attachments/assets/5a0c056d-bd37-4bf4-bc73-b7972944aa3d" />
 
 <img width="1275" height="838" alt="Screenshot 2025-09-06 at 2 37 11 PM" src="https://github.com/user-attachments/assets/ad7e61af-9a5d-4894-bcb3-41db3aeb254a" />
@@ -148,3 +151,5 @@ With this forecasting model buisnesses can now:
 * Resource Planning: Optimize staffing based on predicted demand
 * Revenue Forecasting: Accurate 12-month revenue projections
 * Seasonal Strategy: Data-driven promotional planning
+
+
