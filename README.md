@@ -58,9 +58,17 @@ Here the code applies seasonal-trend decomposition using moving averages (STL-st
 I applied log transformations to the sales series to stabalize relative changes in sales to reduce influences from extreme sales peaks. This ensured that the deomposition produced a clearer seperation between general sales trends and any seasonal components. From there the extracted trend indicates an approximate 8% year-over-year growth in liquor sales across the observed period.
 
 ## Decomposition breakdown
-<img width="662" height="436" alt="Screenshot 2025-09-06 at 1 53 13 PM" src="https://github.com/user-attachments/assets/410869af-b399-4a35-b324-46724cf8910e" />
+# The code:
+<img width="587" height="240" alt="Screenshot 2025-09-06 at 2 07 30 PM" src="https://github.com/user-attachments/assets/2bb465de-b030-4582-b99e-3c668b680908" />
+
+
+# The Monthly sales data broken up by: Raw Sales, Sales Trends, Sales Seasonality, and Sales Residuals 
 <img width="1196" height="803" alt="Screenshot 2025-09-06 at 12 47 35 PM" src="https://github.com/user-attachments/assets/14c36e36-a23e-4f22-903d-721dfd9a4347" />
-<img width="1177" height="382" alt="Screenshot 2025-09-06 at 12 48 02 PM" src="https://github.com/user-attachments/assets/528414cb-4a05-4e21-a0ea-2c33501452e3" />
+
+1. Plot 1: This shows the raw time series of the liqour sales. Here we can see strong periodic peaks, clearly around holidays which suggests definite seasonality.
+2. Plot 2: This plot shows the long term trend data after we applied out STL decomposition within the 12 month windows. From this graph we see a steady upward trend with around a 8% YoY growth
+3. Plot 3: In this graph we see the seasoanl component of our sales data. Each year we see a rise in sales during late fall (October/November) and Decemeber confirming a strong yearly seasonal cycle
+4. Plot 4: This Residual plot shows the sales variations over time. This graph demonstrates that theres no strong structure within the residuals, meaning the decomposition correctly captured the main trend and seasonality within our data.
 
 
 
