@@ -58,11 +58,11 @@ Here the code applies seasonal-trend decomposition using moving averages (STL-st
 I applied log transformations to the sales series to stabalize relative changes in sales to reduce influences from extreme sales peaks. This ensured that the deomposition produced a clearer seperation between general sales trends and any seasonal components. From there the extracted trend indicates an approximate 8% year-over-year growth in liquor sales across the observed period.
 
 ## Decomposition breakdown
-# The code:
+### The code:
 <img width="587" height="240" alt="Screenshot 2025-09-06 at 2 07 30 PM" src="https://github.com/user-attachments/assets/2bb465de-b030-4582-b99e-3c668b680908" />
 
 
-# The Monthly sales data broken up by: Raw Sales, Sales Trends, Sales Seasonality, and Sales Residuals 
+### The Monthly sales data broken up by: Raw Sales, Sales Trends, Sales Seasonality, and Sales Residuals 
 <img width="1196" height="803" alt="Screenshot 2025-09-06 at 12 47 35 PM" src="https://github.com/user-attachments/assets/14c36e36-a23e-4f22-903d-721dfd9a4347" />
 
 1. Plot 1: This shows the raw time series of the liqour sales. Here we can see strong periodic peaks, clearly around holidays which suggests definite seasonality.
@@ -70,21 +70,72 @@ I applied log transformations to the sales series to stabalize relative changes 
 3. Plot 3: In this graph we see the seasoanl component of our sales data. Each year we see a rise in sales during late fall (October/November) and Decemeber confirming a strong yearly seasonal cycle
 4. Plot 4: This Residual plot shows the sales variations over time. This graph demonstrates that theres no strong structure within the residuals, meaning the decomposition correctly captured the main trend and seasonality within our data.
 
-
-
-### Residual analysis
-
 ### Modelling 
+<img width="432" height="203" alt="Screenshot 2025-09-06 at 2 14 19 PM" src="https://github.com/user-attachments/assets/63790028-6687-48a8-b508-fd9e431e0778" />
+
+Prophet model configurations:
+ - Yearly seasonality: Enabled becasue we know the sales clearly follow    a annual cycle
+ - Weekly and Daily seasonality: disabled becasue we resampled the data    earlier for the monthly level.
+ - Seasonality mode: I used multiplicative here because I know the         seasonal effects grew with the overall sales
+ - Changepoint scale: used a low change point scale to make the trend      less sensitive to small fluctuations in data, this in turn prevented    overfitting issues of which I encountered early on.
+ - Interval width: Changing the % from the default of 95% for              practicality in the context of using this model for buisness            applications. If I were to use more conservative uncertantity bounds    can be less actionable in real life scnarios like these.
+
+
+<img width="751" height="77" alt="Screenshot 2025-09-06 at 2 10 14 PM" src="https://github.com/user-attachments/assets/71f200b7-8a56-40db-8777-476d82377efd" />
+
+Here we established changepoints within the sales data where we noticed the general seasonal sales trend deviate from higher sales in october, followed by abover average but lower sales in decemeber. In the last 2 years of the data this pattern flipped with Decemeber seeing more sales than the late fall sales.
+
+<img width="418" height="223" alt="Screenshot 2025-09-06 at 2 24 18 PM" src="https://github.com/user-attachments/assets/15811320-597f-4f0c-b5af-220048fcaf60" />
+
+Reggresors: Although Prophet on its own captures things like trends and seasonality, it doesnt account for external facotrs. By adding regressors, the model now accounts for any sudden structural shifts in sales.
+
+Custom Seasonality: Standard prophet models are good for smooth cycles but during intial tests, the holiday sales spikes caused confusion for model. This feature helped the model focus on capturing the unique surges in sales
 
 ### Forecasting 
+<img width="641" height="138" alt="Screenshot 2025-09-06 at 2 29 24 PM" src="https://github.com/user-attachments/assets/40392606-fe21-43d9-9cbb-c60e2c86f392" />
+
+Here we fit the model and create the future data frame. Since I reasampled the data by monthly sales, we set the "future periods" to 12. On line 153, were extending the regressors so the model can adjust its forecasting for those past structural changes.
 
 ### Visualizations
+### Model visualization code:
+<img width="809" height="516" alt="Screenshot 2025-09-06 at 2 34 50 PM" src="https://github.com/user-attachments/assets/3144a988-9476-420f-ac0c-1e1236206338" />
+
+<img width="990" height="562" alt="Screenshot 2025-09-06 at 2 36 06 PM" src="https://github.com/user-attachments/assets/5a0c056d-bd37-4bf4-bc73-b7972944aa3d" />
+
+<img width="1275" height="838" alt="Screenshot 2025-09-06 at 2 37 11 PM" src="https://github.com/user-attachments/assets/ad7e61af-9a5d-4894-bcb3-41db3aeb254a" />
+
+1. Plot 1: Here we see the steady paced growth over the years
+   
+2. Plot 2: The model shows the earleir observed cyclical buying            behavior from the historical data
+
+3. Plot 3: Visualizes the multiplicative holiday seasonality. This shows how our seasoanlity featruing improves on analyzing the holiday demand spikes beyond the default prophet modeling capabilities.
+
+4. Plot 4: Visualizes the impact our regressors have after we account for the changepoints in the sales data (hence the stepwise graph).
 
 ### Evaluations
-- Model Metrics
+### in-sample and cross validation code:
+<img width="593" height="491" alt="Screenshot 2025-09-06 at 2 46 46 PM" src="https://github.com/user-attachments/assets/67fb4444-21ac-42fa-bb30-df41422feac9" />
+
+Cross Validation: 
+  - Parameters:
+      - "540 days": Training based on the first 540 days
+      - "period = 90 days": period of time for each new forecast for            evaluation
+      - "horizon = '90 days': How far ahead the forecast should be              looking
+  - Performance metrics:
+      - Summarizes reuslts into the metrics like MAPE, RMSE, and MAE.
+
+In-sample evaluation:
+  - Historical forecast: Extracts the model predictions for the             historical period
+  - Error Metrics:
+    - MAE (Mean Absolute Error): Average absolute difference between          predicted and actual values.
+    - RMSE (Root Mean Squared Error): Penalizes larger errors more            heavily than MAE.
+    - MAPE (Mean Absolute Percentage Error): Error as a percentage of         actual sales — easier to interpret.
+    - R² (Coefficient of Determination): Explains how much variance in        actual sales is captured by the model (closer to 1 = better fit).
+
+- Model Metric results
   - MAPE: 14.8% (Mean Absolute Percentage Error)
-  - RMSE: 245,320 bottles (Root Mean Square Error)
-  - MAE: 198,450 bottles (Mean Absolute Error)
+  - RMSE: ~245,320 bottles (Root Mean Square Error)
+  - MAE: ~198,450 bottles (Mean Absolute Error)
   - R²: 0.863 (Coefficient of Determination)
 
 ### Forecasting summary and conclusions 
