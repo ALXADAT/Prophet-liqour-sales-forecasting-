@@ -1,0 +1,235 @@
+import kagglehub
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+from statsmodels.tsa.seasonal import seasonal_decompose
+from prophet import Prophet
+from prophet.diagnostics import cross_validation, performance_metrics
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from prophet.plot import add_changepoints_to_plot
+
+path = kagglehub.dataset_download("residentmario/iowa-liquor-sales")
+csv_filename = 'Iowa_Liquor_Sales.csv'
+full_path_to_csv = os.path.join(path, csv_filename)
+columns_need = [
+    'Date',
+    'Bottles Sold',
+    'Item Description',
+    'Item Number',
+    'Category'
+]
+try:
+    temp_df = pd.read_csv(full_path_to_csv, nrows=5)
+    temp_df.columns = temp_df.columns.str.strip()
+    available_columns = temp_df.columns.tolist()
+
+    missing_cols = [col for col in columns_need if col not in available_columns]
+    if missing_cols:
+        raise ValueError(f"Missing columns: {missing_cols}")
+except Exception as e:
+    raise RuntimeError(f"Error reading dataset: {e}")
+df = pd.read_csv(
+    full_path_to_csv,
+    usecols=lambda x: x.strip() in columns_need, #strip during read 
+    parse_dates=['Date'],
+    date_format='%m/%d/%Y',
+    low_memory=False,
+    nrows=300000  # Remove for full dataset
+)
+df.columns = df.columns.str.strip()
+df = df.dropna(subset=['Date']).set_index('Date').sort_index()
+print(f"Date range: {df.index.min()} to {df.index.max()}")
+
+
+#Monthly resample
+monthly_sales = df['Bottles Sold'].resample('ME').sum().fillna(0)
+
+#Outlier handling
+def handle_outliers(series, method='zscore', threshold=3):
+    series_cleaned = series.copy()
+    if method == 'cap':
+        lower = series.quantile(0.01)
+        upper = series.quantile(0.99)
+        return series_cleaned.clip(lower, upper)
+    elif method == 'zscore':
+        roll_mean = series.rolling(window=3, center=True).mean()
+        roll_std = series.rolling(window=3, center=True).std()
+        z_scores = (series - roll_mean) / roll_std
+        outliers = z_scores.abs() > threshold
+        roll_median = series.rolling(window=3, center=True).median()
+        series_cleaned[outliers] = roll_median[outliers]
+        return series_cleaned.fillna(series)
+    else:
+        return series
+monthly_sales_cl = handle_outliers(monthly_sales, method='zscore')
+print(f"Outliers adjusted using z-score.")
+
+#Seasonality analysis
+monthly_avg_by_month = monthly_sales_cl.groupby(monthly_sales_cl.index.month).mean()
+overall_avg = monthly_avg_by_month.mean()
+seasonal_index = monthly_avg_by_month / overall_avg
+months_labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+print("\n seasonality by month")
+high_season = seasonal_index[seasonal_index > 1.1].index.tolist()
+low_season = seasonal_index[seasonal_index < 0.9].index.tolist()
+for i in range(1, 13):
+    val = seasonal_index[i]
+    status = "Strong" if val > 1.1 else "Weak" if val < 0.9 else "Average"
+    print(f"{months_labels[i-1]}: {val:.2f} ({status})")
+print(f"\nHigh season months: {high_season}")
+print(f"Low season months: {low_season}")
+season_strength = monthly_avg_by_month.std() / monthly_avg_by_month.mean()
+print(f"Seasonality strength: {season_strength:.3f}")
+
+#DECOMPOSITION 
+monthly_log = np.log(monthly_sales_cl + 1)
+decomp = seasonal_decompose(monthly_log, model='additive', period=12, extrapolate_trend='freq')
+
+#Monthly sales deomp. breakdown
+fig, axes = plt.subplots(4, 1, figsize=(12, 8), sharex=True)
+axes[0].plot(monthly_sales_cl, label='Original')
+axes[0].set_title("Original")
+axes[1].plot(decomp.trend, color='red')
+axes[1].set_title("Trend")
+axes[2].plot(decomp.seasonal, color='green')
+axes[2].set_title("Seasonal")
+axes[3].plot(decomp.resid, color='black')
+axes[3].axhline(0, color='k', ls='--', alpha=0.5)
+axes[3].set_title("Residual")
+plt.tight_layout()
+plt.show()
+
+# Residual plot
+plt.figure(figsize=(12, 4))
+plt.plot(decomp.resid, marker='o', markersize=4, linestyle='-', alpha=0.7)
+plt.axhline(0, color='k', linestyle='--', alpha=0.5)
+plt.title("Residuals After Decomposition")
+plt.ylabel("Residual (log scale)")
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+##PROPHET MODELING##
+
+#General indexing for prophet
+prophet_data = monthly_sales_cl.reset_index()
+prophet_data.columns = ['ds', 'y']
+
+#Define structural break dates
+break_dates = ['2014-11-01', '2015-01-01'] # 1st point changed from october to november
+for dt in break_dates:
+    prophet_data[f'after_{dt}'] = (prophet_data['ds'] >= pd.to_datetime(dt)).astype(float)
+
+#model configuration BEFORE fit
+model = Prophet(
+    yearly_seasonality=True,
+    weekly_seasonality=False,
+    daily_seasonality=False,
+    seasonality_mode='multiplicative',
+    changepoint_prior_scale=0.005,
+    seasonality_prior_scale=10.0,
+    interval_width=0.80,
+    changepoints=break_dates  
+)
+
+#Add regressors
+for col in prophet_data.columns:
+    if col.startswith('after_'):
+        model.add_regressor(col)
+#custom seasonality feature fitting 
+model.add_seasonality(
+    name='holiday_season',
+    period=365.25,
+    fourier_order=10,
+    mode='multiplicative'
+)
+
+#Fitting and Forecast
+model.fit(prophet_data)
+future_periods = 12
+future = model.make_future_dataframe(periods=future_periods, freq='ME')
+for dt in break_dates:
+    future[f'after_{dt}'] = (future['ds'] >= pd.to_datetime(dt)).astype(float)
+forecast = model.predict(future)
+
+#model visualization
+fig1 = model.plot(forecast)
+plt.title('Iowa Liquor Sales Forecast - Prophet Model')
+plt.ylabel('Bottles Sold (Monthly)')
+plt.xlabel('Date')
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+fig2 = model.plot_components(forecast, figsize=(15, 10))
+plt.tight_layout()
+plt.show()
+
+#Custom combined plot
+plt.figure(figsize=(15, 8))
+plt.plot(prophet_data['ds'], prophet_data['y'], 'ko-', markersize=3, label='Historical', alpha=0.7)
+plt.plot(forecast['ds'], forecast['yhat'], 'r-', linewidth=2, label='Forecast')
+plt.fill_between(forecast['ds'], forecast['yhat_lower'], forecast['yhat_upper'],
+                 color='red', alpha=0.2, label='80% CI')
+for dt in break_dates:
+    plt.axvline(pd.to_datetime(dt), color='purple', linestyle='--', alpha=0.7, label=f'Change: {dt}')
+plt.title('Iowa Liquor Sales: Historical & Forecast')
+plt.ylabel('Bottles Sold')
+plt.xlabel('Date')
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+##Model evaluations##
+
+print("\nPerforming cross-validation")
+cv_results = cross_validation(
+    model,
+    initial='540 days',
+    period='90 days',
+    horizon='90 days'
+)
+perf_metrics = performance_metrics(cv_results)
+print("\nCross-Validation Metrics:")
+print(perf_metrics[['horizon', 'mape', 'rmse', 'mae']].describe())
+
+#In-sample evaluation
+historical_forecast = forecast[forecast['ds'].isin(prophet_data['ds'])]
+y_true = prophet_data['y'].values
+y_pred = historical_forecast['yhat'].values
+mae = mean_absolute_error(y_true, y_pred)
+rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+mape = np.mean(np.abs((y_true - y_pred) / (y_true + 1e-8))) * 100
+r2 = r2_score(y_true, y_pred)
+print(f"In-Sample Performance:")
+print(f"MAE:  {mae:.0f} bottles")
+print(f"RMSE: {rmse:.0f} bottles")
+print(f"MAPE: {mape:.1f}%")
+print(f"R²:   {r2:.3f}")
+
+#Seasonality
+#seasonality_df = forecast[['ds', 'yearly']].copy()
+#seasonality_df['month'] = seasonality_df['ds'].dt.month
+#prophet_monthly_effect = seasonality_df.groupby('month')['yearly'].mean()
+#print("\n MONTHLY SEASONALITY (PROPHET)")
+
+#for m in range(1, 13):
+#    effect = prophet_monthly_effect.get(m, 0)
+#    impact = "High" if effect > 0.05 else "Low" if effect < -0.05 else "Average"
+#    print(f"{months_labels[m-1]}: {effect:+.3f} ({impact})")
+#Forecast summary
+print("\n FORECAST SUMMARY TABLE")
+future_forecast = forecast[forecast['ds'] > df.index.max()].head(future_periods)
+forecast_summary = future_forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].copy()
+forecast_summary['ds'] = forecast_summary['ds'].dt.strftime('%Y-%m')
+forecast_summary.columns = ['Month', 'Forecast', 'Lower_Bound', 'Upper_Bound']
+forecast_summary[['Forecast', 'Lower_Bound', 'Upper_Bound']] = \
+    forecast_summary[['Forecast', 'Lower_Bound', 'Upper_Bound']].round(0).astype(int)
+print(forecast_summary.to_string(index=False))
+forecast_summary.to_csv('prophet_forecast_results.csv', index=False)
+print(f"\n Forecast saved to csv'")
+
+print("\n Prophet analysis complete!!")
